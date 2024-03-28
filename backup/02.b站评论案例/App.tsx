@@ -1,8 +1,11 @@
 import './App.scss'
 import avatar from './images/bozai.png'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import _ from 'lodash'
 import classNames from 'classnames'
+import {v4 as uuidV4} from 'uuid'
+import dayjs from 'dayjs'
+import axios from 'axios'
 
 /**
  * 评论列表的渲染和操作
@@ -90,15 +93,92 @@ const tabs = [
   1. 按照不同的排序处理状态并新值替换旧值
 使用classnames优化类名控制
   1. npm i classnames
+发表评论
+  1. 获取评论内容
+  2. 点击按钮发布
+  3. rpid uuid ctime使用dayjs
+清空内容与重新聚焦
+  1. 发表后清空内容 value设置为空
+  2. 重新聚焦 获取dom focus
 */
+
+/*
+1. 请求接口获取评论列表并渲染
+  1. json-server + axios
+    1. npm i json-server axios
+    2. db.json
+    3. json-server --watch db.json
+  2. useEffect
+2. 自定义hook封装数据请求
+3. 评论抽离为item
+*/
+
+// 请求的hook
+function useGetList(){
+  // 获取接口数据
+  const [commentList, setCommentList] = useState([])
+  useEffect(()=>{
+    // 请求数据
+    async function getList(){
+      const res = await axios.get('http://localhost:3001/list')
+      setCommentList(res.data)
+    }
+    getList()
+  },[])
+  return {
+    commentList, setCommentList
+  }
+}
+
+// 评论item组件
+function Item(props: any): JSX.Element{
+  return (<div className="reply-item">
+    {/* 头像 */}
+    <div className="root-reply-avatar">
+      <div className="bili-avatar">
+        <img
+          className="bili-avatar-img"
+          alt=""
+          src={props.item.user.avatar}
+        />
+      </div>
+    </div>
+
+    <div className="content-wrap">
+      {/* 用户名 */}
+      <div className="user-info">
+        <div className="user-name">{props.item.user.uname}</div>
+      </div>
+      {/* 评论内容 */}
+      <div className="root-reply">
+        <span className="reply-content">{props.item.content}</span>
+        <div className="reply-info">
+          {/* 评论时间 */}
+          <span className="reply-time">{props.item.ctime}</span>
+          {/* 评论数量 */}
+          <span className="reply-time">点赞数:{props.item.like}</span>
+          {user.uid === props.item.user.uid && 
+          <span className="delete-btn" onClick={()=>props.onDel(props.item.rpid)}>
+            删除
+          </span>}
+        </div>
+      </div>
+    </div>
+  </div>)
+}
 
 const App = () => {
   // 初始按最热排
-  const [commentList, setCommentList] = useState(
-    _.orderBy(defaultList, 'like', 'desc')
-  )
+  // const [commentList, setCommentList] = useState(
+  //   _.orderBy(defaultList, 'like', 'desc')
+  // )
+  // 自定义hook使用
+  const {commentList, setCommentList} = useGetList()
+  
+
+  // 删除评论
   const handleDel = (id: any) => {
-    const newList = commentList.filter((item: any) => item.user.uid !== id)
+    const newList = commentList.filter((item: any) => item.rpid !== id)
     setCommentList(newList)
   }
   // tab切换
@@ -115,6 +195,31 @@ const App = () => {
         _.orderBy(commentList,'ctime','desc')
       )
     }
+  }
+  // 发表评论
+  const [content,setContent] = useState('')
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const handlePublish = () => {
+    if(content.trim()===''){
+      alert('请输入评论内容')
+      return
+    }
+    const newComment = {
+      rpid: Number(uuidV4()),
+      user:{
+        uid:'1834315',
+        avatar,
+        uname: 'kuonji'
+      },
+      content,
+      ctime: dayjs(new Date()).format('MM-DD hh:mm'),// m-d h:m
+      like: 66
+    }
+    setCommentList([newComment,...commentList])
+    // 清空内容
+    setContent('')
+    // 重新聚焦
+    inputRef.current?.focus()
   }
 
   return (
@@ -158,10 +263,13 @@ const App = () => {
             <textarea
               className="reply-box-textarea"
               placeholder="发一条友善的评论"
+              value={content}
+              onChange={(e)=>setContent(e.target.value)}
+              ref={inputRef}
             />
             {/* 发布按钮 */}
             <div className="reply-box-send">
-              <div className="send-text">发布</div>
+              <div className="send-text" onClick={handlePublish}>发布</div>
             </div>
           </div>
         </div>
@@ -169,39 +277,7 @@ const App = () => {
         <div className="reply-list">
           {/* 评论项 */}
           {commentList.map((item: any)=>(
-            <div className="reply-item" key={item.rpid}>
-            {/* 头像 */}
-            <div className="root-reply-avatar">
-              <div className="bili-avatar">
-                <img
-                  className="bili-avatar-img"
-                  alt=""
-                  src={item.user.avatar}
-                />
-              </div>
-            </div>
-
-            <div className="content-wrap">
-              {/* 用户名 */}
-              <div className="user-info">
-                <div className="user-name">{item.user.uname}</div>
-              </div>
-              {/* 评论内容 */}
-              <div className="root-reply">
-                <span className="reply-content">{item.content}</span>
-                <div className="reply-info">
-                  {/* 评论时间 */}
-                  <span className="reply-time">{item.ctime}</span>
-                  {/* 评论数量 */}
-                  <span className="reply-time">点赞数:{item.like}</span>
-                  {user.uid === item.user.uid && 
-                  <span className="delete-btn" onClick={()=>handleDel(item.user.uid)}>
-                    删除
-                  </span>}
-                </div>
-              </div>
-            </div>
-            </div>
+            <Item key={item.id} item={item} onDel={handleDel}/>
           ))}
           
         </div>
